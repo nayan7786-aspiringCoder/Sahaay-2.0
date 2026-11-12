@@ -33,11 +33,10 @@ A simple household services booking platform connecting households with domestic
 Sahaay-2.0/
 ├── app.py              # Backend: Python Flask application & REST API
 ├── requirements.txt    # Minimal dependency (Flask)
-├── frontend/           # All Frontend code organized in one folder
-│   ├── index.html      # Structure
-│   ├── style.css       # Styling
+├── frontend/           # Complete Frontend folder
+│   ├── index.html      # HTML Structure
+│   ├── style.css       # Light theme styling
 │   └── script.js       # Interactivity & API fetch integration
-├── index.html          # Web redirect for GitHub Pages hosting
 └── README.md           # Project documentation
 ```
 
@@ -65,4 +64,4 @@ Sahaay-2.0/
 ## 🌐 Live Website (GitHub Pages)
 
 Access the live web page directly on GitHub:
-👉 **https://nayan7786-aspiringCoder.github.io/Sahaay-2.0/**
+👉 **https://nayan7786-aspiringCoder.github.io/Sahaay-2.0/frontend/**
