@@ -6,12 +6,13 @@ Python + Flask REST API with HTTP Methods (GET, POST, PUT, DELETE)
 import os
 import sqlite3
 import json
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 
 app = Flask(
     __name__,
-    static_folder="static",
-    template_folder="."
+    static_folder="frontend",
+    static_url_path="",
+    template_folder="frontend"
 )
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "sahaay.db")
@@ -93,8 +94,8 @@ def add_cors_headers(response):
 # -----------------------------------------------------------------------------
 @app.route("/")
 def home():
-    """Serves the main website."""
-    return render_template("index.html")
+    """Serves the main website from frontend/index.html."""
+    return send_from_directory("frontend", "index.html")
 
 
 # -----------------------------------------------------------------------------

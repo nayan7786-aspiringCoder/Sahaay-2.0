@@ -20,10 +20,10 @@ A simple household services booking platform connecting households with domestic
    - `POST /api/bookings` & `GET /api/bookings` — Create and view bookings.
    - `POST /api/chat` & `GET /api/chat/<id>` — Direct chat between user and helper.
 
-3. **Frontend Integrated with Backend via API** (`index.html`, `static/script.js`, `static/style.css`):
-   - Light theme (cream and dark green palette).
-   - Asynchronous `fetch()` calls for real-time registration, search, booking, and in-app chat.
-   - Accessible locally via Flask and directly online through GitHub Pages.
+3. **Frontend Integrated with Backend via API** (`frontend/`):
+   - **`frontend/index.html`** — HTML structure and layouts.
+   - **`frontend/style.css`** — Light theme styling (cream and dark green palette).
+   - **`frontend/script.js`** — JavaScript `fetch()` calls to interact with the Flask REST API.
 
 ---
 
@@ -31,13 +31,14 @@ A simple household services booking platform connecting households with domestic
 
 ```
 Sahaay-2.0/
-├── app.py              # Backend: Python Flask application & REST API routes
+├── app.py              # Backend: Python Flask application & REST API
 ├── requirements.txt    # Minimal dependency (Flask)
-├── index.html          # Frontend: HTML interface
-├── static/
-│   ├── style.css       # Styling: Light theme (cream & dark green)
-│   └── script.js       # Integration: JavaScript API fetch calls
-└── README.md           # Instructions
+├── frontend/           # All Frontend code organized in one folder
+│   ├── index.html      # Structure
+│   ├── style.css       # Styling
+│   └── script.js       # Interactivity & API fetch integration
+├── index.html          # Web redirect for GitHub Pages hosting
+└── README.md           # Project documentation
 ```
 
 ---
