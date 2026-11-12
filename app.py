@@ -1,97 +1,137 @@
 """
 Sahaay 2.0 - Household Services Booking Platform Backend
-Built with Python & Flask.
-Implements RESTful routes and all primary HTTP methods (GET, POST, PUT, DELETE).
+Python + Flask REST API with HTTP Methods (GET, POST, PUT, DELETE)
 """
 
 import os
+import sqlite3
 import json
-from flask import Flask, request, jsonify, render_template, send_from_directory
-from database import init_db, get_db_connection
-
-# Optional CORS support; if flask_cors is not installed, fallback to after_request headers
-try:
-    from flask_cors import CORS
-    has_cors = True
-except ImportError:
-    has_cors = False
+from flask import Flask, request, jsonify, render_template
 
 app = Flask(
     __name__,
     static_folder="static",
-    template_folder="templates"
+    template_folder="."
 )
 
-if has_cors:
-    CORS(app)
+DB_PATH = os.path.join(os.path.dirname(__file__), "sahaay.db")
+
+
+def get_db():
+    """Connect to SQLite database."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    """Create database tables if they do not exist. Starts completely empty (no fake data)."""
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # Helpers table (stores registered helpers)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS helpers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            location TEXT NOT NULL,
+            skills TEXT NOT NULL,
+            timings TEXT NOT NULL,
+            experience_years INTEGER DEFAULT 1,
+            hourly_rate INTEGER DEFAULT 150,
+            bio TEXT,
+            is_emergency INTEGER DEFAULT 0,
+            availability_status TEXT DEFAULT 'Available'
+        )
+    """)
+
+    # Bookings table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bookings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            helper_id INTEGER NOT NULL,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT NOT NULL,
+            customer_address TEXT NOT NULL,
+            service_needed TEXT NOT NULL,
+            booking_date TEXT NOT NULL,
+            booking_time TEXT,
+            notes TEXT,
+            status TEXT DEFAULT 'Confirmed',
+            FOREIGN KEY (helper_id) REFERENCES helpers (id) ON DELETE CASCADE
+        )
+    """)
+
+    # Chat messages table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            helper_id INTEGER NOT NULL,
+            sender TEXT NOT NULL,
+            text TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (helper_id) REFERENCES helpers (id) ON DELETE CASCADE
+        )
+    """)
+
+    conn.commit()
+    conn.close()
 
 
 @app.after_request
 def add_cors_headers(response):
-    """Ensure CORS headers are set so GitHub Pages or external frontends can call this API."""
+    """Allow frontend to communicate with API."""
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
 
 # -----------------------------------------------------------------------------
-# Frontend Routes
+# Frontend Route
 # -----------------------------------------------------------------------------
 @app.route("/")
-def index():
-    """Serves the main web application UI."""
+def home():
+    """Serves the main website."""
     return render_template("index.html")
 
 
-@app.route("/health")
-def health():
-    """Healthcheck endpoint for deployment monitoring (Render, Railway, etc.)."""
-    return jsonify({"status": "healthy", "service": "Sahaay 2.0 API"}), 200
-
-
 # -----------------------------------------------------------------------------
-# API Endpoints: Helpers (GET, POST, PUT, DELETE)
+# API Routes: Helpers (GET, POST, PUT, DELETE)
 # -----------------------------------------------------------------------------
 @app.route("/api/helpers", methods=["GET"])
 def get_helpers():
-    """
-    HTTP GET: Retrieve all helpers with optional search, skill, and emergency filters.
-    Query Params:
-      - search: string to search in name, location, or skills
-      - skill: specific skill filter (e.g. 'Cooking', 'Driver')
-      - emergency: 1 for emergency on-call tradespeople, 0 for household helpers
-    """
-    conn = get_db_connection()
+    """HTTP GET: Retrieve all helpers with optional search, skill, or emergency filter."""
+    conn = get_db()
     cursor = conn.cursor()
 
-    search_query = request.args.get("search", "").strip().lower()
-    skill_filter = request.args.get("skill", "").strip().lower()
-    emergency_filter = request.args.get("emergency")
+    search = request.args.get("search", "").strip().lower()
+    skill = request.args.get("skill", "").strip().lower()
+    emergency = request.args.get("emergency")
 
     query = "SELECT * FROM helpers WHERE 1=1"
     params = []
 
-    if emergency_filter is not None:
+    if emergency is not None:
         query += " AND is_emergency = ?"
-        params.append(int(emergency_filter))
+        params.append(int(emergency))
 
-    if skill_filter and skill_filter != "all":
+    if skill and skill != "all":
         query += " AND LOWER(skills) LIKE ?"
-        params.append(f"%{skill_filter}%")
+        params.append(f"%{skill}%")
 
-    if search_query:
+    if search:
         query += " AND (LOWER(name) LIKE ? OR LOWER(location) LIKE ? OR LOWER(skills) LIKE ?)"
-        term = f"%{search_query}%"
-        params.extend([term, term, term])
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
 
     query += " ORDER BY id DESC"
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
     helpers = []
-    for row in rows:
-        item = dict(row)
+    for r in rows:
+        item = dict(r)
         try:
             item["skills"] = json.loads(item["skills"])
         except Exception:
@@ -102,38 +142,12 @@ def get_helpers():
     return jsonify({"success": True, "count": len(helpers), "data": helpers}), 200
 
 
-@app.route("/api/helpers/<int:helper_id>", methods=["GET"])
-def get_helper_by_id(helper_id):
-    """HTTP GET: Retrieve detailed profile for a single helper."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM helpers WHERE id = ?", (helper_id,))
-    row = cursor.fetchone()
-    conn.close()
-
-    if row is None:
-        return jsonify({"success": False, "error": f"Helper with ID {helper_id} not found"}), 404
-
-    item = dict(row)
-    try:
-        item["skills"] = json.loads(item["skills"])
-    except Exception:
-        item["skills"] = [s.strip() for s in item["skills"].split(",") if s.strip()]
-
-    return jsonify({"success": True, "data": item}), 200
-
-
 @app.route("/api/helpers", methods=["POST"])
-def create_helper():
-    """
-    HTTP POST: Register a new helper (Providing Service).
-    JSON Payload:
-      - name, phone, location, skills (list or str), timings
-      - experience_years, hourly_rate, bio, is_emergency
-    """
+def add_helper():
+    """HTTP POST: Register a new helper (Providing Service)."""
     data = request.get_json(force=True, silent=True) or request.form.to_dict()
     if not data:
-        return jsonify({"success": False, "error": "Missing JSON request body"}), 400
+        return jsonify({"success": False, "error": "No data received"}), 400
 
     name = data.get("name", "").strip()
     phone = data.get("phone", "").strip()
@@ -142,148 +156,72 @@ def create_helper():
     skills_raw = data.get("skills", [])
 
     if not name or not phone or not location:
-        return jsonify({
-            "success": False,
-            "error": "Required fields: name, phone, location"
-        }), 400
+        return jsonify({"success": False, "error": "Name, phone, and location are required"}), 400
 
     if isinstance(skills_raw, list):
         skills_json = json.dumps(skills_raw)
-    elif isinstance(skills_raw, str):
-        skills_list = [s.strip() for s in skills_raw.split(",") if s.strip()]
-        skills_json = json.dumps(skills_list)
     else:
-        skills_json = json.dumps(["General Help"])
+        skills_json = json.dumps([s.strip() for s in str(skills_raw).split(",") if s.strip()])
 
     experience_years = int(data.get("experience_years", 1))
     hourly_rate = int(data.get("hourly_rate", 150))
-    bio = data.get("bio", f"Experienced in household assistance across {location}.")
+    bio = data.get("bio", "").strip()
     is_emergency = 1 if str(data.get("is_emergency", 0)).lower() in ("1", "true") else 0
-    availability_status = data.get("availability_status", "Available")
-    avatar_color = data.get("avatar_color", "#2d6a4f")
 
-    conn = get_db_connection()
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('''
+    cursor.execute("""
         INSERT INTO helpers (
             name, phone, location, skills, timings,
-            experience_years, hourly_rate, bio,
-            is_emergency, availability_status, avatar_color
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
+            experience_years, hourly_rate, bio, is_emergency
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
         name, phone, location, skills_json, timings or "Flexible Timings",
-        experience_years, hourly_rate, bio, is_emergency, availability_status, avatar_color
+        experience_years, hourly_rate, bio, is_emergency
     ))
     new_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "message": "Helper registered successfully",
-        "data": {
-            "id": new_id,
-            "name": name,
-            "phone": phone,
-            "location": location,
-            "skills": json.loads(skills_json),
-            "timings": timings,
-            "hourly_rate": hourly_rate,
-            "is_emergency": is_emergency
-        }
-    }), 201
+    return jsonify({"success": True, "message": "Helper registered successfully", "id": new_id}), 201
 
 
 @app.route("/api/helpers/<int:helper_id>", methods=["PUT"])
 def update_helper(helper_id):
-    """
-    HTTP PUT: Update existing helper details or availability status.
-    """
-    data = request.get_json(force=True, silent=True) or request.form.to_dict()
-    if not data:
-        return jsonify({"success": False, "error": "No update data provided"}), 400
+    """HTTP PUT: Update helper availability or details."""
+    data = request.get_json(force=True, silent=True) or {}
+    new_status = data.get("availability_status", "Available")
 
-    conn = get_db_connection()
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM helpers WHERE id = ?", (helper_id,))
-    existing = cursor.fetchone()
-
-    if not existing:
-        conn.close()
-        return jsonify({"success": False, "error": f"Helper with ID {helper_id} not found"}), 404
-
-    # Build dynamic update statement based on fields passed
-    allowed_fields = [
-        "name", "phone", "location", "timings", "experience_years",
-        "hourly_rate", "bio", "is_emergency", "availability_status"
-    ]
-    updates = []
-    values = []
-
-    for field in allowed_fields:
-        if field in data:
-            updates.append(f"{field} = ?")
-            values.append(data[field])
-
-    if "skills" in data:
-        skills_val = data["skills"]
-        if isinstance(skills_val, list):
-            skills_val = json.dumps(skills_val)
-        updates.append("skills = ?")
-        values.append(skills_val)
-
-    if not updates:
-        conn.close()
-        return jsonify({"success": False, "error": "No valid fields provided to update"}), 400
-
-    values.append(helper_id)
-    query = f"UPDATE helpers SET {', '.join(updates)} WHERE id = ?"
-    cursor.execute(query, values)
+    cursor.execute("UPDATE helpers SET availability_status = ? WHERE id = ?", (new_status, helper_id))
     conn.commit()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "message": f"Helper {helper_id} updated successfully"
-    }), 200
+    return jsonify({"success": True, "message": f"Helper {helper_id} updated"}), 200
 
 
 @app.route("/api/helpers/<int:helper_id>", methods=["DELETE"])
 def delete_helper(helper_id):
-    """
-    HTTP DELETE: Remove a helper profile from the system.
-    """
-    conn = get_db_connection()
+    """HTTP DELETE: Remove helper profile."""
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM helpers WHERE id = ?", (helper_id,))
-    existing = cursor.fetchone()
-
-    if not existing:
-        conn.close()
-        return jsonify({"success": False, "error": f"Helper with ID {helper_id} not found"}), 404
-
     cursor.execute("DELETE FROM helpers WHERE id = ?", (helper_id,))
     conn.commit()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "message": f"Helper profile {helper_id} ({existing['name']}) removed successfully"
-    }), 200
+    return jsonify({"success": True, "message": f"Helper {helper_id} deleted"}), 200
 
 
 # -----------------------------------------------------------------------------
-# API Endpoints: Emergency Services
+# API Routes: Emergency Services
 # -----------------------------------------------------------------------------
 @app.route("/api/emergency", methods=["GET"])
-def get_emergency_services():
-    """
-    HTTP GET: Quick retrieval of immediate emergency on-call tradespeople
-    (Electricians, Plumbers, Carpenters).
-    """
-    conn = get_db_connection()
+def get_emergency():
+    """HTTP GET: Quick retrieval of emergency helpers (electricians, plumbers)."""
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM helpers WHERE is_emergency = 1 ORDER BY id ASC")
+    cursor.execute("SELECT * FROM helpers WHERE is_emergency = 1 ORDER BY id DESC")
     rows = cursor.fetchall()
     conn.close()
 
@@ -300,173 +238,85 @@ def get_emergency_services():
 
 
 # -----------------------------------------------------------------------------
-# API Endpoints: Bookings
+# API Routes: Bookings
 # -----------------------------------------------------------------------------
 @app.route("/api/bookings", methods=["GET", "POST"])
 def handle_bookings():
-    """
-    HTTP GET: Retrieve all booking records.
-    HTTP POST: Book a helper for a specific household service.
-    """
-    conn = get_db_connection()
+    """HTTP GET (retrieve bookings) & HTTP POST (book a helper)."""
+    conn = get_db()
     cursor = conn.cursor()
 
     if request.method == "GET":
-        cursor.execute('''
+        cursor.execute("""
             SELECT b.*, h.name as helper_name, h.phone as helper_phone
             FROM bookings b
             JOIN helpers h ON b.helper_id = h.id
             ORDER BY b.id DESC
-        ''')
+        """)
         bookings = [dict(r) for r in cursor.fetchall()]
         conn.close()
-        return jsonify({"success": True, "count": len(bookings), "data": bookings}), 200
+        return jsonify({"success": True, "data": bookings}), 200
 
-    # POST method
     data = request.get_json(force=True, silent=True) or request.form.to_dict()
-    if not data:
-        conn.close()
-        return jsonify({"success": False, "error": "Missing booking data"}), 400
-
-    helper_id = data.get("helper_id")
-    customer_name = data.get("customer_name", "").strip()
-    customer_phone = data.get("customer_phone", "").strip()
-    customer_address = data.get("customer_address", "").strip()
-    service_needed = data.get("service_needed", "General Help")
-    booking_date = data.get("booking_date", "")
-    booking_time = data.get("booking_time", "")
-    notes = data.get("notes", "")
-
-    if not helper_id or not customer_name or not customer_phone or not customer_address:
-        conn.close()
-        return jsonify({
-            "success": False,
-            "error": "Required fields: helper_id, customer_name, customer_phone, customer_address"
-        }), 400
-
-    cursor.execute('''
+    cursor.execute("""
         INSERT INTO bookings (
             helper_id, customer_name, customer_phone,
-            customer_address, service_needed, booking_date,
-            booking_time, notes, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        helper_id, customer_name, customer_phone,
-        customer_address, service_needed, booking_date,
-        booking_time, notes, "Confirmed"
+            customer_address, service_needed, booking_date, booking_time, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        data.get("helper_id"),
+        data.get("customer_name"),
+        data.get("customer_phone"),
+        data.get("customer_address"),
+        data.get("service_needed"),
+        data.get("booking_date"),
+        data.get("booking_time", ""),
+        data.get("notes", "")
     ))
     booking_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "message": "Booking confirmed successfully",
-        "data": {"id": booking_id, "status": "Confirmed"}
-    }), 201
+    return jsonify({"success": True, "message": "Booking confirmed", "id": booking_id}), 201
 
 
 # -----------------------------------------------------------------------------
-# API Endpoints: Real-time In-App Chat / Modification Inquiries
+# API Routes: Chat
 # -----------------------------------------------------------------------------
 @app.route("/api/chat/<int:helper_id>", methods=["GET"])
-def get_chat_messages(helper_id):
-    """HTTP GET: Retrieve chat message thread between customer and helper."""
-    conn = get_db_connection()
+def get_chat(helper_id):
+    """HTTP GET: Retrieve chat messages for a helper."""
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM messages WHERE helper_id = ? ORDER BY timestamp ASC",
-        (helper_id,)
-    )
+    cursor.execute("SELECT * FROM messages WHERE helper_id = ? ORDER BY timestamp ASC", (helper_id,))
     messages = [dict(r) for r in cursor.fetchall()]
     conn.close()
-    return jsonify({"success": True, "helper_id": helper_id, "data": messages}), 200
+    return jsonify({"success": True, "data": messages}), 200
 
 
 @app.route("/api/chat", methods=["POST"])
-def send_chat_message():
-    """
-    HTTP POST: Send a message to discuss requirements, negotiate timings or modify scope.
-    """
-    data = request.get_json(force=True, silent=True) or request.form.to_dict()
-    if not data:
-        return jsonify({"success": False, "error": "Missing message payload"}), 400
-
+def send_chat():
+    """HTTP POST: Send message to discuss timings or requirements."""
+    data = request.get_json(force=True, silent=True) or {}
     helper_id = data.get("helper_id")
     sender = data.get("sender", "customer")
     text = data.get("text", "").strip()
 
     if not helper_id or not text:
-        return jsonify({"success": False, "error": "helper_id and text are required"}), 400
+        return jsonify({"success": False, "error": "helper_id and text required"}), 400
 
-    conn = get_db_connection()
+    conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO messages (helper_id, sender, text) VALUES (?, ?, ?)",
-        (helper_id, sender, text)
-    )
-    msg_id = cursor.lastrowid
+    cursor.execute("INSERT INTO messages (helper_id, sender, text) VALUES (?, ?, ?)", (helper_id, sender, text))
     conn.commit()
-
-    # Automatically generate an polite AI response from the helper after customer sends a question!
-    reply = None
-    if sender == "customer":
-        reply_texts = [
-            "Namaste! Thank you for messaging. Yes, I can adjust the timings according to your preference.",
-            "Hello! I am comfortable with this work. Please let me know the exact location and preferred date.",
-            "Understood! We can finalize the details and rate as discussed. Looking forward to assisting you."
-        ]
-        import random
-        reply_text = random.choice(reply_texts)
-        cursor.execute(
-            "INSERT INTO messages (helper_id, sender, text) VALUES (?, ?, ?)",
-            (helper_id, "helper", reply_text)
-        )
-        reply = {"sender": "helper", "text": reply_text}
-        conn.commit()
-
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "message": "Message sent",
-        "data": {"id": msg_id, "helper_id": helper_id, "text": text, "automated_reply": reply}
-    }), 201
+    return jsonify({"success": True, "message": "Message sent"}), 201
 
 
-# -----------------------------------------------------------------------------
-# API Endpoints: System Overview Stats
-# -----------------------------------------------------------------------------
-@app.route("/api/stats", methods=["GET"])
-def get_stats():
-    """HTTP GET: Platform metrics for dashboard."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) as total FROM helpers WHERE is_emergency = 0")
-    total_helpers = cursor.fetchone()["total"]
-
-    cursor.execute("SELECT COUNT(*) as total FROM helpers WHERE is_emergency = 1")
-    total_emergency = cursor.fetchone()["total"]
-
-    cursor.execute("SELECT COUNT(*) as total FROM bookings")
-    total_bookings = cursor.fetchone()["total"]
-    conn.close()
-
-    return jsonify({
-        "success": True,
-        "data": {
-            "household_helpers": total_helpers,
-            "emergency_providers": total_emergency,
-            "total_bookings": total_bookings
-        }
-    }), 200
-
-
-# Initialize database upon start
-with app.app_context():
-    init_db()
+# Initialize database upon startup
+init_db()
 
 if __name__ == "__main__":
-    # Runs locally on http://127.0.0.1:5000
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
