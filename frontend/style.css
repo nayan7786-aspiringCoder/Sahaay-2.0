@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Sahaay 2.0 - Stylesheet
+   Sahaay - Stylesheet
    Theme: Light (Warm Cream & Pure White with Elegant Dark Green Accents)
    ========================================================================== */
 
@@ -1088,4 +1088,43 @@ footer.site-footer {
   .form-group.full-width {
     grid-column: span 1;
   }
+}
+
+/* Custom Timing Slot Chips */
+.timing-slot-chip {
+  background: var(--light-mint);
+  color: var(--primary-green);
+  border: 1px solid var(--light-mint-border);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timing-slot-chip .remove-slot-btn {
+  background: transparent;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.timing-chip-card {
+  background: var(--bg-cream);
+  color: var(--dark-green);
+  border: 1px solid var(--border-color);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  margin-bottom: 4px;
 }

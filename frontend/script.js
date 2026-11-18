@@ -1,5 +1,5 @@
 /**
- * Sahaay 2.0 - Frontend API Integration (Fetch)
+ * Sahaay - Frontend API Integration (Fetch)
  * Connects UI with Python Flask Backend Routes (GET, POST, PUT, DELETE)
  */
 
@@ -20,17 +20,22 @@ let currentSearchTerm = "";
 let activeChatHelperId = null;
 let activeHelperForBooking = null;
 
+// Multi-slot custom timings state
+let customTimingSlots = [];
+
 // ----------------------------------------------------------------------------
 // Initialization
 // ----------------------------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   initCustomSkillAdder();
+  initCustomTimingSlots();
   initRegistrationForm();
   initBookingForm();
   initChatForm();
   initSearchAndFilters();
 
+  renderTimingSlots();
   loadHelpers();
   loadBookings();
 });
@@ -90,8 +95,10 @@ async function loadHelpers() {
     if (currentSearchTerm) {
       const q = currentSearchTerm.toLowerCase();
       filtered = filtered.filter(h =>
-        h.name.toLowerCase().includes(q) ||
-        h.location.toLowerCase().includes(q)
+        (h.name || "").toLowerCase().includes(q) ||
+        (h.location || "").toLowerCase().includes(q) ||
+        (h.timings || "").toLowerCase().includes(q) ||
+        (h.skills || []).some(s => s.toLowerCase().includes(q))
       );
     }
     renderHelpers(filtered, container, false);
@@ -133,6 +140,12 @@ function renderHelpers(helpers, container, isEmergency) {
     const skillsHtml = skillsList.map(s => `<span class="skill-tag">${escapeHtml(s)}</span>`).join("");
     const initial = (h.name || "H").charAt(0).toUpperCase();
 
+    // Render multiple custom timing chips
+    const timingsRaw = (h.timings || '').split(/\s*\|\s*/).filter(Boolean);
+    const timingChips = timingsRaw.length > 0
+      ? timingsRaw.map(t => `<span class="timing-chip-card">⏰ ${escapeHtml(t)}</span>`).join("")
+      : `<span class="timing-chip-card">⏰ Flexible Timing</span>`;
+
     return `
       <div class="helper-card">
         <div class="card-top">
@@ -149,22 +162,24 @@ function renderHelpers(helpers, container, isEmergency) {
         </div>
 
         <div class="card-meta-chips">
-          <span class="meta-chip">⏰ ${escapeHtml(h.timings || 'Flexible')}</span>
           <span class="meta-chip">⭐ ${h.experience_years || 1} yrs exp</span>
+        </div>
+
+        <div style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
+          ${timingChips}
         </div>
 
         <div class="skills-wrapper">${skillsHtml}</div>
         <p class="helper-bio">${escapeHtml(h.bio || 'Verified household service provider.')}</p>
 
         <div class="card-footer">
-          <div>
-            <span class="hourly-rate">₹${h.hourly_rate || 150}</span>
-            <span class="rate-label">${h.is_emergency ? 'per visit' : 'per hour'}</span>
+          <div style="font-size: 12px; color: var(--text-muted); font-weight: 600;">
+            🤝 Direct Agreement
           </div>
 
           <div class="card-actions">
             <button class="btn-chat" onclick="openChatModal(${h.id}, '${escapeHtml(h.name)}')">💬 Chat</button>
-            <button class="btn-book" onclick="openBookingModal(${h.id}, '${escapeHtml(h.name)}', ${h.hourly_rate || 150})">Book</button>
+            <button class="btn-book" onclick="openBookingModal(${h.id}, '${escapeHtml(h.name)}')">Book</button>
             <button class="btn-delete-card" title="Delete Profile (HTTP DELETE)" onclick="deleteHelper(${h.id}, '${escapeHtml(h.name)}')">🗑️</button>
           </div>
         </div>
@@ -172,6 +187,66 @@ function renderHelpers(helpers, container, isEmergency) {
     `;
   }).join("");
 }
+
+// ----------------------------------------------------------------------------
+// Custom Multi-Slot Timing Feature
+// ----------------------------------------------------------------------------
+function initCustomTimingSlots() {
+  const addBtn = document.getElementById("btn-add-timing-slot");
+  const input = document.getElementById("custom-slot-input");
+  const container = document.getElementById("timing-slots-list");
+
+  if (!addBtn || !input || !container) return;
+
+  const addSlot = () => {
+    const val = input.value.trim();
+    if (!val) {
+      showToast("Please enter a work timing slot (e.g. 06:30 AM - 09:00 AM)", "error");
+      return;
+    }
+
+    if (customTimingSlots.includes(val)) {
+      showToast("This timing slot is already added.", "error");
+      return;
+    }
+
+    customTimingSlots.push(val);
+    renderTimingSlots();
+    input.value = "";
+    showToast(`Added timing slot: "${val}"`, "success");
+  };
+
+  addBtn.addEventListener("click", addSlot);
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addSlot();
+    }
+  });
+}
+
+function renderTimingSlots() {
+  const container = document.getElementById("timing-slots-list");
+  if (!container) return;
+
+  if (customTimingSlots.length === 0) {
+    container.innerHTML = `<span style="font-size: 13px; color: var(--text-light); font-style: italic;">No timing slots added yet. Type a slot above and click "+ Add Timing Slot".</span>`;
+    return;
+  }
+
+  container.innerHTML = customTimingSlots.map((slot, idx) => `
+    <span class="timing-slot-chip">
+      ⏰ ${escapeHtml(slot)}
+      <button type="button" class="remove-slot-btn" onclick="removeTimingSlot(${idx})" title="Remove this slot">&times;</button>
+    </span>
+  `).join("");
+}
+
+// Global function to remove a timing slot
+window.removeTimingSlot = function(idx) {
+  customTimingSlots.splice(idx, 1);
+  renderTimingSlots();
+};
 
 // ----------------------------------------------------------------------------
 // HTTP POST: Register a Helper (Providing Service)
@@ -190,14 +265,18 @@ function initRegistrationForm() {
       return;
     }
 
+    if (customTimingSlots.length === 0) {
+      showToast("Please add at least one work timing slot.", "error");
+      return;
+    }
+
     const payload = {
       name: document.getElementById("reg-name").value.trim(),
       phone: document.getElementById("reg-phone").value.trim(),
       location: document.getElementById("reg-location").value.trim(),
-      timings: document.getElementById("reg-timings").value.trim(),
+      timings: customTimingSlots.join(" | "),
       skills: selectedSkills,
       experience_years: parseInt(document.getElementById("reg-exp").value) || 1,
-      hourly_rate: parseInt(document.getElementById("reg-rate").value) || 150,
       bio: document.getElementById("reg-bio").value.trim(),
       is_emergency: document.getElementById("reg-emergency").checked ? 1 : 0
     };
@@ -211,6 +290,8 @@ function initRegistrationForm() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       showToast(`Helper profile for ${payload.name} created!`, "success");
       form.reset();
+      customTimingSlots = [];
+      renderTimingSlots();
       switchTab("browse-panel");
     } catch (err) {
       // Offline fallback
@@ -218,6 +299,8 @@ function initRegistrationForm() {
       memoryHelpers.unshift(newHelper);
       showToast(`Helper profile for ${payload.name} created!`, "success");
       form.reset();
+      customTimingSlots = [];
+      renderTimingSlots();
       switchTab("browse-panel");
     }
   });
@@ -244,10 +327,9 @@ async function deleteHelper(helperId, helperName) {
 // ----------------------------------------------------------------------------
 // Bookings (HTTP POST & GET)
 // ----------------------------------------------------------------------------
-function openBookingModal(helperId, helperName, rate) {
-  activeHelperForBooking = { id: helperId, name: helperName, rate: rate };
+function openBookingModal(helperId, helperName) {
+  activeHelperForBooking = { id: helperId, name: helperName };
   document.getElementById("modal-helper-name").innerText = helperName;
-  document.getElementById("modal-helper-rate").innerText = `₹${rate}`;
   document.getElementById("booking-modal").classList.add("active");
 }
 
@@ -434,7 +516,7 @@ function initCustomSkillAdder() {
 }
 
 // ----------------------------------------------------------------------------
-// Search and Skill Filtering
+// Search and Skill Filtering (by work, locality, timings, name)
 // ----------------------------------------------------------------------------
 function initSearchAndFilters() {
   const searchInput = document.getElementById("search-input");

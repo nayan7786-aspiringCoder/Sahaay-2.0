@@ -1,4 +1,4 @@
-# Sahaay 2.0 — Household Services Booking Platform 🌿
+# Sahaay — Household Services Booking Platform 🌿
 
 A simple household services booking platform connecting households with domestic helpers (cooks, cleaners, babysitters, drivers, gardeners) and emergency technicians (electricians, plumbers).
 

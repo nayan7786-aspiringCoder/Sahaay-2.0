@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sahaay 2.0 — Household Services Booking Platform</title>
+  <title>Sahaay — Household Services Booking Platform</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%3E<text y=%2226%22 font-size=%2224%22>🌿</text></svg>">
 </head>
@@ -26,7 +26,7 @@
       <a href="#" class="brand" onclick="switchTab('browse-panel')">
         <div class="brand-icon">स</div>
         <div class="brand-details">
-          <h1>Sahaay 2.0</h1>
+          <h1>Sahaay</h1>
           <span>Household Services Platform</span>
         </div>
       </a>
@@ -99,7 +99,7 @@
                 type="text" 
                 id="search-input" 
                 class="search-input" 
-                placeholder="Search helpers by name, locality (e.g. Indiranagar, Green Park), or skill..."
+                placeholder="Find helper by work, locality, timings..."
               >
             </div>
             <button class="btn-primary" onclick="loadHelpers()">Refresh Directory</button>
@@ -138,7 +138,7 @@
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label" for="reg-name">Helper Full Name *</label>
-                <input type="text" id="reg-name" class="form-input" placeholder="e.g. Sunita Devi" required>
+                <input type="text" id="reg-name" class="form-input" placeholder="e.g. Karm Sah" required>
               </div>
 
               <div class="form-group">
@@ -187,20 +187,21 @@
                 </div>
               </div>
 
-              <div class="form-group">
-                <label class="form-label" for="reg-timings">Serving Timings / Slots *</label>
-                <select id="reg-timings" class="form-select" required>
-                  <option value="Morning (07:00 AM - 11:00 AM)">Morning (07:00 AM - 11:00 AM)</option>
-                  <option value="Afternoon (12:00 PM - 04:00 PM)">Afternoon (12:00 PM - 04:00 PM)</option>
-                  <option value="Evening (04:00 PM - 08:00 PM)">Evening (04:00 PM - 08:00 PM)</option>
-                  <option value="Full Day (08:00 AM - 06:00 PM)">Full Day (08:00 AM - 06:00 PM)</option>
-                  <option value="Flexible Timings">Flexible Timings</option>
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="reg-rate">Expected Rate (₹ per hour / visit) *</label>
-                <input type="number" id="reg-rate" class="form-input" value="160" min="50" step="10" required>
+              <!-- Custom Multiple Work Timing Slots -->
+              <div class="form-group full-width">
+                <label class="form-label">Available Work Timing Slots * (Add multiple slots)</label>
+                <div class="skills-selector">
+                  <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                    <input type="text" id="custom-slot-input" class="form-input" placeholder="Enter custom work timing (e.g. 06:30 AM - 09:00 AM, or Evening 5 PM - 8 PM)..." style="flex: 1;">
+                    <button type="button" id="btn-add-timing-slot" class="btn-secondary">➕ Add Timing Slot</button>
+                  </div>
+                  <div id="timing-slots-list" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 36px; align-items: center;">
+                    <!-- Dynamically added timing slots appear here -->
+                  </div>
+                  <small style="color: var(--text-muted); font-size: 12px; margin-top: 6px; display: block;">
+                    ⏰ Type a timing slot above and click "Add Timing Slot" to add as many working shifts as you want.
+                  </small>
+                </div>
               </div>
 
               <div class="form-group">
@@ -322,7 +323,6 @@
       <div class="modal-header">
         <div>
           <h3>Book Helper: <span id="modal-helper-name"></span></h3>
-          <span id="modal-helper-rate" style="font-size: 13px; color: var(--primary-green); font-weight: 700;"></span>
         </div>
         <button class="modal-close-btn" onclick="closeBookingModal()">&times;</button>
       </div>
@@ -396,7 +396,7 @@
         <a href="#emergency-panel" onclick="switchTab('emergency-panel')">Emergency Help</a>
       </div>
       <p class="footer-copy">
-        Sahaay 2.0 — Python Flask & REST API Mini Project | Built with Light Theme (Cream & Dark Green)
+        Sahaay — Python Flask & REST API Mini Project | Built with Light Theme (Cream & Dark Green)
       </p>
     </div>
   </footer>

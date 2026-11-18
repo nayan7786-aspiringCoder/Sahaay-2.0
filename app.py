@@ -1,5 +1,5 @@
 """
-Sahaay 2.0 - Household Services Booking Platform Backend
+Sahaay - Household Services Booking Platform Backend
 Python + Flask REST API with HTTP Methods (GET, POST, PUT, DELETE)
 """
 
@@ -123,8 +123,8 @@ def get_helpers():
         params.append(f"%{skill}%")
 
     if search:
-        query += " AND (LOWER(name) LIKE ? OR LOWER(location) LIKE ? OR LOWER(skills) LIKE ?)"
-        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+        query += " AND (LOWER(name) LIKE ? OR LOWER(location) LIKE ? OR LOWER(skills) LIKE ? OR LOWER(timings) LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"])
 
     query += " ORDER BY id DESC"
     cursor.execute(query, params)
@@ -165,7 +165,7 @@ def add_helper():
         skills_json = json.dumps([s.strip() for s in str(skills_raw).split(",") if s.strip()])
 
     experience_years = int(data.get("experience_years", 1))
-    hourly_rate = int(data.get("hourly_rate", 150))
+    hourly_rate = int(data.get("hourly_rate", 0))
     bio = data.get("bio", "").strip()
     is_emergency = 1 if str(data.get("is_emergency", 0)).lower() in ("1", "true") else 0
 
